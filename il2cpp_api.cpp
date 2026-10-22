@@ -7,6 +7,7 @@
 #include <elf.h>
 #include <link.h>
 #include <thread>
+#include <unistd.h>
 #include <type_traits>
 
 namespace il2cpp {
@@ -163,9 +164,49 @@ static bool has_game_assembly() {
     return false;
 }
 
+// Reads 16 bytes at `p` without risking a crash: the kernel copies them into a pipe and returns
+// EFAULT for an unmapped address instead of raising SIGSEGV.
+static bool safe_read16(const void* p, uint32_t out[4]) {
+    static int fds[2] = {-1, -1};
+    if (fds[0] < 0 && pipe(fds) != 0) { fds[0] = fds[1] = -1; return false; }
+    if (write(fds[1], p, 16) != 16) return false;
+    return read(fds[0], out, 16) == 16;
+}
+
+// aarch64 code never starts with four zero words (0x00000000 is the permanently-undefined UDF).
+// The shipped libil2cpp.so has an all-zero code segment on disk, so a function whose first words are
+// still zero has not been restored/decrypted yet and calling it would raise SIGILL.
+static bool code_ready(void* fn) {
+    uint32_t w[4];
+    if (!fn || !safe_read16(fn, w)) return false;
+    return (w[0] | w[1] | w[2] | w[3]) != 0;
+}
+
+static bool api_code_ready(std::string* missing) {
+    struct E { const char* n; void* p; } list[] = {
+        {"domain_get", (void*)api.domain_get}, {"domain_get_assemblies", (void*)api.domain_get_assemblies},
+        {"assembly_get_image", (void*)api.assembly_get_image}, {"image_get_name", (void*)api.image_get_name},
+        {"class_from_name", (void*)api.class_from_name}, {"class_get_method_from_name", (void*)api.class_get_method_from_name},
+        {"method_get_return_type", (void*)api.method_get_return_type}, {"method_get_param", (void*)api.method_get_param},
+        {"method_get_flags", (void*)api.method_get_flags}, {"type_get_name", (void*)api.type_get_name},
+        {"thread_attach", (void*)api.thread_attach}};
+    bool all = true;
+    for (auto& e : list) if (!code_ready(e.p)) { all = false; if (missing) { *missing += e.n; *missing += ' '; } }
+    return all;
+}
+
 bool wait_until_ready(int timeout_seconds) {
     using namespace std::chrono;
     auto deadline = steady_clock::now() + seconds(timeout_seconds);
+    int waits = 0;
+    for (;;) {
+        std::string missing;
+        if (api_code_ready(&missing)) break;
+        if (steady_clock::now() >= deadline) { LOGE("IL2CPP function code still empty (not restored) - not calling it: %s", missing.c_str()); return false; }
+        if (waits++ % 20 == 0) LOGI("step: waiting for IL2CPP code to be restored in memory: %s", missing.c_str());
+        std::this_thread::sleep_for(milliseconds(500));
+    }
+    LOGI("step: IL2CPP function code is present in memory");
     int tries = 0;
     while (steady_clock::now() < deadline) {
         if (tries == 0) LOGI("step: calling il2cpp_domain_get (%p)", (void*)api.domain_get);
