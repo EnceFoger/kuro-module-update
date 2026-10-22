@@ -1,4 +1,4 @@
-name: Build Kuro Companion
+name: Build Rena
 on:
   workflow_dispatch:
 jobs:
@@ -23,6 +23,6 @@ jobs:
           ./build.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: kuro_companion
-          path: kuro_companion.zip
+          name: kuro-mod-menu
+          path: kuro-mod-menu.zip
           if-no-files-found: error
