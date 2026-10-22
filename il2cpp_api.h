@@ -34,7 +34,7 @@ struct Api {
 
 extern Api api;
 
-struct LibRef { uintptr_t bias = 0; const void* dynamic = nullptr; };
+struct LibRef { uintptr_t bias = 0; const void* dynamic = nullptr; std::string path; };
 
 bool locate_library(LibRef& out);                 // finds the loaded libil2cpp.so (or a renamed copy)
 void log_loaded_libs();                           // logs il2cpp/unity-related loaded libraries (diagnostics)
