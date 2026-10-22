@@ -1,0 +1,8 @@
+# Kuro Companion settings. Re-read automatically every ~2 seconds (no game restart needed).
+# 1.0 = feature off. Values are clamped to 0.0 .. 50.0.
+attack_speed=1.0
+attack_speed_mode=mul      # mul: result = original * value | add: result = original + (value - 1)
+move_speed=1.0
+move_speed_mode=mul
+attack_range=1.0
+skill_no_cd=0              # 1 = on (experimental, see README)

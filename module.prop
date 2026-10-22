@@ -1,0 +1,6 @@
+id=kuro_companion
+name=Kuro Companion
+version=v0.1
+versionCode=1
+author=companion
+description=Companion Zygisk module for Kuro (Bleach Brave Souls): attack speed, move speed, attack range, skill cooldown. Independent of Kuro.
