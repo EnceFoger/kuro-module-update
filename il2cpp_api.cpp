@@ -151,7 +151,9 @@ static void* g_domain = nullptr;
 
 static bool has_game_assembly() {
     size_t n = 0;
+    LOGI("step: il2cpp_domain_get_assemblies");
     void** asms = api.domain_get_assemblies(g_domain, &n);
+    LOGI("step: assemblies=%p count=%zu", (void*)asms, n);
     if (!asms) return false;
     for (size_t i = 0; i < n; ++i) {
         void* img = api.assembly_get_image(asms[i]);
@@ -164,17 +166,25 @@ static bool has_game_assembly() {
 bool wait_until_ready(int timeout_seconds) {
     using namespace std::chrono;
     auto deadline = steady_clock::now() + seconds(timeout_seconds);
+    int tries = 0;
     while (steady_clock::now() < deadline) {
+        if (tries == 0) LOGI("step: calling il2cpp_domain_get (%p)", (void*)api.domain_get);
         g_domain = api.domain_get();
+        if (tries == 0) LOGI("step: il2cpp_domain_get returned %p", g_domain);
         if (g_domain) break;
+        if (++tries % 20 == 0) LOGI("step: domain still null after %d tries", tries);
         std::this_thread::sleep_for(milliseconds(500));
     }
     if (!g_domain) { LOGE("IL2CPP domain never became available"); return false; }
     LOGI("IL2CPP domain available; letting runtime finish initialising");
     std::this_thread::sleep_for(seconds(3));
+    LOGI("step: il2cpp_thread_attach");
     api.thread_attach(g_domain);
+    LOGI("step: thread attached");
+    int polls = 0;
     while (steady_clock::now() < deadline) {
         if (has_game_assembly()) { LOGI("Assembly-CSharp loaded"); return true; }
+        if (++polls % 10 == 0) LOGI("step: Assembly-CSharp not yet loaded (%d polls)", polls);
         std::this_thread::sleep_for(seconds(1));
     }
     LOGE("Assembly-CSharp never appeared");
